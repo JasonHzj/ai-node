@@ -1,0 +1,12 @@
+2024-02-28 11:16:29 - Starting C:\Program Files\nodejs\node.exe  --harmony D:\工作\中台源码\FH_node\node_modules\node-windows\lib\wrapper.js --file D:\工作\中台源码\FH_node\app.js --scriptoptions= --log "caserver wrapper" --grow 0.25 --wait 1 --maxrestarts 40 --abortonerror n --stopparentfirst undefined
+2024-02-28 11:16:29 - Started 26712
+2024-02-28 11:20:13 - Stopping caserver.exe
+2024-02-28 11:20:13 - ProcessKill 26712
+2024-02-28 11:20:13 - Found child process: 38104 Name: conhost.exe
+2024-02-28 11:20:13 - Stopping process 38104
+2024-02-28 11:20:13 - Send SIGINT 38104
+2024-02-28 11:20:13 - SIGINT to 38104 failed - Killing as fallback
+2024-02-28 11:20:13 - Stopping process 26712
+2024-02-28 11:20:13 - Send SIGINT 26712
+2024-02-28 11:20:13 - SIGINT to 26712 failed - Killing as fallback
+2024-02-28 11:20:13 - Finished caserver.exe

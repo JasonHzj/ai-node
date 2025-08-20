@@ -1,0 +1,252 @@
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1
+D:\工作\中台源码\FH_node\app.js:47
+app.use(expressJWT({
+        ^
+
+TypeError: expressJWT is not a function
+    at Object.<anonymous> (D:\工作\中台源码\FH_node\app.js:47:9)
+    at Module._compile (node:internal/modules/cjs/loader:1376:14)
+    at Module._extensions..js (node:internal/modules/cjs/loader:1435:10)
+    at Module.load (node:internal/modules/cjs/loader:1207:32)
+    at Module._load (node:internal/modules/cjs/loader:1023:12)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:135:12)
+    at node:internal/main/run_main_module:28:49
+
+Node.js v20.11.1

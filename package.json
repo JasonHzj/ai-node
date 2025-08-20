@@ -1,0 +1,48 @@
+{
+  "name": "node_dsj",
+  "version": "1.0.0",
+  "main": "app.js",
+  "bin": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "pkg": "pkg . --debug"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@escook/express-joi": "^1.1.0",
+    "@hapi/joi": "^17.1.0",
+    "async": "^3.2.0",
+    "axios": "^1.11.0",
+    "bcryptjs": "^2.4.3",
+    "body-parser": "^1.19.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.2",
+    "express-jwt": "^5.3.3",
+    "jsonwebtoken": "^9.0.2",
+    "lodash": "^4.17.21",
+    "moment": "^2.29.1",
+    "multer": "^1.4.4",
+    "mysql": "^2.18.1",
+    "mysql-ssh": "^1.0.6",
+    "mysql2": "^2.3.3",
+    "node-cron": "^4.2.1",
+    "node-windows": "^1.0.0-beta.8",
+    "socket.io": "^4.8.1",
+    "ssh2": "^1.16.0",
+    "xlsx": "^0.18.5"
+  },
+  "pkg": {
+    "scripts": [
+      "node_modules/mysql2/lib/**/*.js"
+    ],
+    "assets": [],
+    "targets": [
+      "node18-linux-x64"
+    ],
+    "outputPath": "dist"
+  },
+  "description": ""
+}
