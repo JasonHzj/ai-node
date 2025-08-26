@@ -430,14 +430,14 @@ exports.getCumulativeStatsData = async (req, res) => {
  * @description 获取看板Offer列表所需的所有数据 (已新增 approved_commission 字段)
  */
 exports.getDashboardOfferList = async (req, res) => {
-    // 新增 adId 参数
-    const {
-        startDate,
-        endDate,
-        adId
-    } = req.query;
-    const userId = req.user.id;
-    let client;
+   // 新增 adId 参数
+   const {
+       startDate,
+       endDate,
+       adId
+   } = req.query;
+   const userId = req.user.id;
+   let client;
 
     // 参数校验：要么有日期，要么有adId
     if (!adId && (!startDate || !endDate)) {
@@ -454,7 +454,7 @@ exports.getDashboardOfferList = async (req, res) => {
             // =============================================
             //  模式一: 按广告ID搜索 (不限时间)
             // =============================================
-            mainSql = `
+             mainSql = `
                 SELECT
                     a.merchant_name,
                     a.platform_ad_id,
@@ -463,9 +463,9 @@ exports.getDashboardOfferList = async (req, res) => {
                     COALESCE(tc.conversions, 0) as conversions,
                     COALESCE(tc.pending_commission, 0) as pending_commission,
                     COALESCE(tc.rejected_commission, 0) as rejected_commission,
-                    COALESCE(tc.approved_commission, 0) as approved_commission, -- 新增
+                    COALESCE(tc.approved_commission, 0) as approved_commission,
                     COALESCE(tc.total_commission, 0) as total_commission,
-                    0 as previous_commission, -- 搜索模式下，环比无意义, 设为0
+                    0 as previous_commission,
                     tc.multi_account_commissions
                 FROM ads a
                 LEFT JOIN (
@@ -473,19 +473,34 @@ exports.getDashboardOfferList = async (req, res) => {
                     WHERE user_id = ? AND platform_ad_id = ? GROUP BY platform_ad_id
                 ) AS cc ON a.platform_ad_id = cc.platform_ad_id
                 LEFT JOIN (
+                    -- ▼▼▼ 核心修正：使用两层聚合来正确计算多账户佣金 ▼▼▼
                     SELECT
-                        t.platform_ad_id, SUM(order_unit) as conversions,
-                        SUM(CASE WHEN status = 'Pending' THEN sale_comm ELSE 0 END) as pending_commission,
-                        SUM(CASE WHEN status = 'Rejected' THEN sale_comm ELSE 0 END) as rejected_commission,
-                        SUM(CASE WHEN status = 'Approved' THEN sale_comm ELSE 0 END) as approved_commission, -- 新增
-                        SUM(sale_comm) as total_commission,
-                        GROUP_CONCAT(DISTINCT CONCAT(pa.account_name, ':', t.sale_comm) SEPARATOR ';') as multi_account_commissions
-                    FROM transactions t JOIN user_platform_accounts pa ON t.platform_account_id = pa.id
-                    WHERE t.user_id = ? AND t.platform_ad_id = ? GROUP BY t.platform_ad_id
+                        platform_ad_id,
+                        SUM(conversions) as conversions,
+                        SUM(pending_commission) as pending_commission,
+                        SUM(rejected_commission) as rejected_commission,
+                        SUM(approved_commission) as approved_commission,
+                        SUM(total_commission) as total_commission,
+                        GROUP_CONCAT(CONCAT(account_name, ':', total_commission) SEPARATOR ';') as multi_account_commissions
+                    FROM (
+                        SELECT
+                            t.platform_ad_id,
+                            pa.account_name,
+                            SUM(order_unit) as conversions,
+                            SUM(CASE WHEN status = 'Pending' THEN sale_comm ELSE 0 END) as pending_commission,
+                            SUM(CASE WHEN status = 'Rejected' THEN sale_comm ELSE 0 END) as rejected_commission,
+                            SUM(CASE WHEN status = 'Approved' THEN sale_comm ELSE 0 END) as approved_commission,
+                            SUM(sale_comm) as total_commission
+                        FROM transactions t
+                        JOIN user_platform_accounts pa ON t.platform_account_id = pa.id
+                        WHERE t.user_id = ? AND t.platform_ad_id = ?
+                        GROUP BY t.platform_ad_id, pa.account_name
+                    ) AS account_level_summary
+                    GROUP BY platform_ad_id
                 ) AS tc ON a.platform_ad_id = tc.platform_ad_id
                 WHERE a.user_id = ? AND a.platform_ad_id = ?;
             `;
-            mainSqlParams = [userId, adId, userId, adId, userId, adId];
+             mainSqlParams = [userId, adId, userId, adId, userId, adId];
 
             dailyTrendSql = `
                 SELECT
@@ -522,7 +537,7 @@ exports.getDashboardOfferList = async (req, res) => {
                     COALESCE(tc_trans.conversions, 0) as conversions,
                     COALESCE(tc_trans.pending_commission, 0) as pending_commission,
                     COALESCE(tc_trans.rejected_commission, 0) as rejected_commission,
-                    COALESCE(tc_trans.approved_commission, 0) as approved_commission, -- 新增
+                    COALESCE(tc_trans.approved_commission, 0) as approved_commission,
                     COALESCE(tc_trans.total_commission, 0) as total_commission,
                     COALESCE(tp.previous_total_commission, 0) as previous_commission,
                     tc_trans.multi_account_commissions
@@ -537,18 +552,30 @@ exports.getDashboardOfferList = async (req, res) => {
                     GROUP BY platform_ad_id
                 ) AS cc ON a.platform_ad_id = cc.platform_ad_id
                 LEFT JOIN (
+                    -- ▼▼▼ 核心修正：使用两层聚合来正确计算多账户佣金 ▼▼▼
                     SELECT
                         platform_ad_id,
-                        SUM(order_unit) as conversions,
-                        SUM(CASE WHEN status = 'Pending' THEN sale_comm ELSE 0 END) as pending_commission,
-                        SUM(CASE WHEN status = 'Rejected' THEN sale_comm ELSE 0 END) as rejected_commission,
-                        SUM(CASE WHEN status = 'Approved' THEN sale_comm ELSE 0 END) as approved_commission, -- 新增
-                        SUM(sale_comm) as total_commission,
-                        GROUP_CONCAT(DISTINCT CONCAT(pa.account_name, ':', t.sale_comm) SEPARATOR ';') as multi_account_commissions
-                    FROM transactions t
-                    JOIN user_platform_accounts pa ON t.platform_account_id = pa.id
-                    WHERE t.user_id = ? AND t.order_time BETWEEN ? AND ?
-                    GROUP BY t.platform_ad_id
+                        SUM(conversions) as conversions,
+                        SUM(pending_commission) as pending_commission,
+                        SUM(rejected_commission) as rejected_commission,
+                        SUM(approved_commission) as approved_commission,
+                        SUM(total_commission) as total_commission,
+                        GROUP_CONCAT(CONCAT(account_name, ':', total_commission) SEPARATOR ';') as multi_account_commissions
+                    FROM (
+                        SELECT
+                            t.platform_ad_id,
+                            pa.account_name,
+                            SUM(order_unit) as conversions,
+                            SUM(CASE WHEN status = 'Pending' THEN sale_comm ELSE 0 END) as pending_commission,
+                            SUM(CASE WHEN status = 'Rejected' THEN sale_comm ELSE 0 END) as rejected_commission,
+                            SUM(CASE WHEN status = 'Approved' THEN sale_comm ELSE 0 END) as approved_commission,
+                            SUM(sale_comm) as total_commission
+                        FROM transactions t
+                        JOIN user_platform_accounts pa ON t.platform_account_id = pa.id
+                        WHERE t.user_id = ? AND t.order_time BETWEEN ? AND ?
+                        GROUP BY t.platform_ad_id, pa.account_name
+                    ) AS account_level_summary
+                    GROUP BY platform_ad_id
                 ) AS tc_trans ON a.platform_ad_id = tc_trans.platform_ad_id
                 LEFT JOIN (
                     SELECT platform_ad_id, SUM(sale_comm) as previous_total_commission FROM transactions
