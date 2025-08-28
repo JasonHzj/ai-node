@@ -43,17 +43,37 @@ exports.getAccounts = async (req, res) => {
                 const countryMap = new Map(countries.map((c) => [c.criterion_id.toString(), c.name_zh]));
                 const languageMap = new Map(languages.map((l) => [l.criterion_id.toString(), l.name_zh]));
 
-                const sql = `
-            SELECT 
-                acc.*, job.id as job_id, job.status as job_status, 
-                job.action_type as job_action_type, job.result_message as job_result_message,
-                job.payload as job_payload, job.processed_at as job_processed_at
-            FROM google_ads_accounts acc
-            LEFT JOIN ad_creation_jobs job ON acc.sub_account_id = job.sub_account_id AND job.user_id = ?
-            WHERE acc.user_id = ?
-            ORDER BY acc.manager_name, acc.sub_account_name ASC
-        `;
-                const [accounts] = await client.query(sql, [userId, userId]);
+               const sql = `
+  SELECT 
+      acc.id,
+      acc.user_id,
+      acc.manager_id,
+      acc.manager_name,
+      acc.sub_account_id,
+      acc.sub_account_name,
+      acc.account_status,
+      acc.currency_code,
+      acc.affiliate_account,
+      acc.affiliate_network,
+      acc.advertiser_name,
+      acc.country_code_from_name,
+      acc.advertiser_id,
+      acc.campaigns_data,
+      acc.last_manual_update,
+      DATE_FORMAT(acc.last_updated, '%Y-%m-%d %H:%i:%s') as last_updated,
+      job.id as job_id, 
+      job.status as job_status, 
+      job.action_type as job_action_type, 
+      job.result_message as job_result_message,
+      job.payload as job_payload, 
+      DATE_FORMAT(job.processed_at, '%Y-%m-%d %H:%i:%s') as job_processed_at
+  FROM google_ads_accounts acc
+  LEFT JOIN ad_creation_jobs job 
+    ON acc.sub_account_id = job.sub_account_id AND job.user_id = ?
+  WHERE acc.user_id = ?
+  ORDER BY acc.manager_name, acc.sub_account_name ASC
+`;
+               const [accounts] = await client.query(sql, [userId, userId]);
 
         const processedAccounts = accounts.map((account) => {
             if (account.campaigns_data && Array.isArray(account.campaigns_data)) {
