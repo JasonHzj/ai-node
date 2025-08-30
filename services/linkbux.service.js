@@ -213,6 +213,7 @@ async function runInitialSyncForUser(io, userId, account, startDate) {
                    ad.logo, ad.categories, ad.offer_type, ad.avg_payment_cycle, ad.avg_payout,
                    ad.primary_region, ad.support_region, ad.rd
                ]);
+               await client.query(sql, [values]);
             }
             io.to(userId.toString()).emit('sync_progress', {
                 progress: 10,

@@ -74,6 +74,8 @@ app.use(expressJWT({
       '/api/register',
       '/api/login',
       // **新增：明确将接收Ads脚本数据的接口加入豁免名单**
+      '/api/ads/receive-data', // 实时数据接口
+      '/api/ads/receive-historical-data', // **(新增)** 历史数据接口
       '/api/ads/receive-data', // 用于前端获取公共选项的接口 (使用正则表达式匹配所有子路径)
       '/api/jobs/pending', // 脚本获取任务接口
       '/api/jobs/update-status', // 脚本更新状态接口

@@ -20,6 +20,7 @@ router.get('/user/platform-accounts', userHandler.getPlatformAccounts);
 
 // 批量保存用户的所有平台账户
 router.post('/user/platform-accounts', userHandler.savePlatformAccounts);
+router.delete('/user/platform-accounts/:id', userHandler.deletePlatformAccount);
 // 新增：管理员相关路由
 router.get('/admin/users', userHandler.getAllUsers);
 router.put('/admin/users/:id', userHandler.updateUserStatusAndRole);

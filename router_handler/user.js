@@ -246,6 +246,7 @@ exports.getPlatformAccounts = async (req, res) => {
  * @function savePlatformAccounts
  * @description 批量保存(覆盖)当前用户的所有联盟平台账户
  */
+// 修正后的 savePlatformAccounts 函数
 exports.savePlatformAccounts = async (req, res) => {
     const {
         accounts
@@ -261,25 +262,48 @@ exports.savePlatformAccounts = async (req, res) => {
         client = await db.getClient();
         await client.beginTransaction(); // 开始事务
 
-        // 1. 先删除该用户的所有现有平台账户
-        const deleteSql = 'DELETE FROM user_platform_accounts WHERE user_id = ?';
-        await client.query(deleteSql, [userId]);
+        // 1. 不再删除旧数据，而是遍历前端传来的每个账户
+        const upsertPromises = accounts.map(acc => {
+            // 确保账户的核心信息都存在，防止前端传空对象
+            if (!acc.platform_name || !acc.account_name || !acc.api_token) {
+                return Promise.resolve(); // 如果是空行或无效数据，则跳过
+            }
 
-        // 2. 过滤出有效数据并重新插入
-        const validAccounts = accounts.filter(acc => acc.platform_name && acc.account_name && acc.api_token);
-        if (validAccounts.length > 0) {
-            const values = validAccounts.map(acc => [
-                userId,
-                acc.platform_name,
-                acc.account_name,
-                Buffer.from(acc.api_token).toString('base64')
-            ]);
-            const insertSql = 'INSERT INTO user_platform_accounts (user_id, platform_name, account_name, api_token) VALUES ?';
-            await client.query(insertSql, [values]);
-        }
+            const encryptedToken = Buffer.from(acc.api_token).toString('base64');
+
+            if (acc.id) {
+                // 2. 如果账户有 id，说明是已存在的账户，执行 UPDATE
+                // !! 重要：WHERE 条件中必须同时检查 id 和 user_id，防止越权修改
+                const updateSql = `
+                    UPDATE user_platform_accounts 
+                    SET platform_name = ?, account_name = ?, api_token = ? 
+                    WHERE id = ? AND user_id = ?
+                `;
+                return client.query(updateSql, [acc.platform_name, acc.account_name, encryptedToken, acc.id, userId]);
+            } else {
+                // 3. 如果账户没有 id，说明是新账户，执行 INSERT
+                const insertSql = `
+                    INSERT INTO user_platform_accounts 
+                    (user_id, platform_name, account_name, api_token) 
+                    VALUES (?, ?, ?, ?)
+                `;
+                return client.query(insertSql, [userId, acc.platform_name, acc.account_name, encryptedToken]);
+            }
+        });
+
+        // 等待所有的更新和插入操作完成
+        await Promise.all(upsertPromises);
 
         await client.commit(); // 提交事务
-        res.cc('平台账户保存成功！', 0);
+
+        // 4. (最佳实践) 操作成功后，从数据库重新查询完整的账户列表返回给前端
+        //    这样前端就不需要再单独请求一次，也避免了数据不一致的问题
+        //    注意：为了安全，不要把 api_token 返回给前端
+        const selectSql = 'SELECT id, platform_name, account_name FROM user_platform_accounts WHERE user_id = ? ORDER BY id';
+        const [updatedAccounts] = await db.query(selectSql, [userId]);
+
+        // 5. 将成功信息和最新的数据一起返回
+        res.cc('平台账户保存成功！', 0, updatedAccounts);
 
     } catch (error) {
         if (client) await client.rollback(); // 出错则回滚
@@ -394,6 +418,38 @@ exports.updateUserPermissions = async (req, res) => {
         if (client) {
             client.release();
             console.log("UpdateUserPermissions: 数据库连接已释放");
+        }
+    }
+};
+
+//移除联盟账户
+exports.deletePlatformAccount = async (req, res) => {
+    const {
+        id
+    } = req.params; // 从 URL 中获取要删除的账户 ID
+    const userId = req.user.id;
+    let client;
+
+    try {
+        client = await db.getClient();
+
+        // 执行删除操作，必须同时验证 id 和 user_id 防止越权删除
+        const deleteSql = 'DELETE FROM user_platform_accounts WHERE id = ? AND user_id = ?';
+        const [result] = await client.query(deleteSql, [id, userId]);
+
+        if (result.affectedRows === 0) {
+            // 如果 affectedRows 是 0，说明没找到对应的记录（可能ID不对或不属于该用户）
+            return res.cc('未找到要删除的账户或权限不足。');
+        }
+
+        res.cc('账户删除成功！', 0);
+
+    } catch (error) {
+        res.cc(error);
+    } finally {
+        if (client) {
+            client.release();
+            console.log("DeletePlatformAccount: 数据库连接已释放");
         }
     }
 };
