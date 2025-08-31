@@ -27,4 +27,5 @@ router.get('/dashboard/search-ads', dashboardHandler.searchAds);
 router.get('/dashboard/right-panel/summary', dashboardHandler.getRightPanelSummary);
 router.get('/dashboard/right-panel/ad-detail', dashboardHandler.getRightPanelAdDetail);
 
+
 module.exports = router;

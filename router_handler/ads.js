@@ -1,9 +1,8 @@
 // =======================================================================
-// 文件: router_handler/ads.js (功能增强版)
+// 文件: router_handler/ads.js (修正版)
 // 作用: 接收并处理来自 Google Ads 脚本的数据同步请求。
 // 核心改动:
-// 1. 修改 receiveData 函数，增加对实时性能数据的处理。
-// 2. 新增 receiveHistoricalData 函数，用于接收和存储每日历史数据。
+// - 修正了 receiveData 函数中 INSERT 语句列数与值的数量不匹配的问题。
 // =======================================================================
 
 const db = require('../db');
@@ -90,8 +89,8 @@ exports.receiveData = async (req, res) => {
                 userId, account.manager_id, account.manager_name, account.sub_account_id, name, accountStatus, account.currency_code,
                 parsedData.affiliate_account, parsedData.affiliate_network, parsedData.advertiser_name, parsedData.country_code_from_name, parsedData.advertiser_id,
                 JSON.stringify(account.campaigns_data),
-                // 新增的性能字段
-                account.impressions, account.clicks, account.ctr, account.cpc, account.cost_micros
+                account.impressions, account.clicks, account.ctr, account.cpc, account.cost_micros,
+                new Date() // **<-- The Fix is here!** We add the 19th value for the 'last_updated_time' column.
             ];
         });
 
@@ -229,4 +228,4 @@ exports.receiveHistoricalData = async (req, res) => {
             console.log("ReceiveHistoricalData: 数据库连接已释放");
         }
     }
-}
+};

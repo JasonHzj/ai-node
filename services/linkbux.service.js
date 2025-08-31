@@ -20,7 +20,7 @@ async function fetchPaginatedData(params, progressContext = null) {
     let currentPage = 1;
     let totalPages = 1;
     do {
-        const MAX_RETRIES = 3;
+        const MAX_RETRIES = 5;
         const INITIAL_DELAY = 30000;
         let success = false;
 
@@ -82,9 +82,9 @@ async function fetchPaginatedData(params, progressContext = null) {
                 const waitTime = INITIAL_DELAY * attempt;
                 const message = `[${progressContext.accountName}] API请求失败，将在 ${waitTime / 1000} 秒后重试...`;
                 if (progressContext) {
-                    io.to(progressContext.userId.toString()).emit('sync_progress', {
-                        progress: progressContext.baseProgress,
-                        message
+                  progressContext.io.to(progressContext.userId.toString()).emit('sync_progress', {
+                              progress: progressContext.baseProgress,
+                              message
                     });
                 }
                 console.log(`[后台任务] ==> ${message}`);
