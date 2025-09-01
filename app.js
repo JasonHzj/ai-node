@@ -25,6 +25,8 @@ const platformsRouter = require('./router/platforms');
 const platformSyncJob = require('./jobs/syncPlatforms');
 // --- 新增 --- 导入看板路由模块
 const dashboardRouter = require('./router/dashboard'); // <--- 在这里新增导入
+
+const adAccountsRouter = require('./router/ad_accounts')
 const jwt = require('jsonwebtoken');
 
 
@@ -161,6 +163,7 @@ app.use('/api', platformsRouter);
 app.use('/api', dashboardRouter); // <--- 在这里新增挂载
 app.use('/api', jobsRouter);
 app.use('/my', userInfoRouter);
+app.use('/api', adAccountsRouter);
 
 //错误中间件
 app.use((err, req, res, next) => {
