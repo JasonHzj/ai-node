@@ -28,6 +28,7 @@ const dashboardRouter = require('./router/dashboard'); // <--- 在这里新增�
 
 const adAccountsRouter = require('./router/ad_accounts')
 const linkJobsRouter = require('./router/link_jobs'); // [新增] 导入新的路由模块
+const managementRouter = require('./router/management');
 const jwt = require('jsonwebtoken');
 
 
@@ -166,6 +167,7 @@ app.use('/api', jobsRouter);
 app.use('/my', userInfoRouter);
 app.use('/api', adAccountsRouter);
 app.use('/api', linkJobsRouter);
+app.use('/api', managementRouter);
 //错误中间件
 app.use((err, req, res, next) => {
    //数据验证失败

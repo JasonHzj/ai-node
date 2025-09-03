@@ -11,7 +11,6 @@ router.post('/link-jobs', linkJobsHandler.createLinkJob);
 
 // GET /api/link-jobs - 获取当前用户的所有换链接任务
 router.get('/link-jobs', linkJobsHandler.getLinkJobs);
-
 // 可以在此添加更多路由，例如:
 // GET /api/link-jobs/:id - 获取单个任务详情
 // PUT /api/link-jobs/:id - 更新某个任务

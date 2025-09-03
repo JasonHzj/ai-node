@@ -23,6 +23,7 @@ exports.getAdAccountsDashboard = async (req, res) => {
     try {
         client = await db.getClient();
 
+        // 1. 基础查询: 在您的基础上，我们额外获取 job.payload
         const baseSql = `
             SELECT
                 acc.id,
@@ -37,32 +38,23 @@ exports.getAdAccountsDashboard = async (req, res) => {
                 acc.last_updated_time,
                 acc.today_clicks,
                 acc.today_cost_micros,
-                acc.campaigns_data,
                 job.status as job_status,
-                job.payload as job_payload,
+                job.payload as job_payload, -- [修改点 1] 从 ad_creation_jobs 表中额外获取 payload 字段
                 JSON_UNQUOTE(JSON_EXTRACT(acc.campaigns_data, '$[0].budget')) as daily_budget_default,
                 JSON_EXTRACT(acc.campaigns_data, '$[0].locations') as target_region_json_default,
                 fin.initial_balance,
-                fin.total_recharge,
-                lcj.id as link_job_id,
-                lcj.change_interval_minutes
+                fin.total_recharge
             FROM google_ads_accounts acc
-            LEFT JOIN (
-                SELECT t1.* FROM ad_creation_jobs t1 INNER JOIN (
+            LEFT JOIN(
+                SELECT t1.* FROM ad_creation_jobs t1 INNER JOIN(
                     SELECT sub_account_id, MAX(created_at) as max_created_at FROM ad_creation_jobs WHERE user_id = ?
                     GROUP BY sub_account_id
                 ) t2 ON t1.sub_account_id = t2.sub_account_id AND t1.created_at = t2.max_created_at WHERE t1.user_id = ?
             ) job ON acc.sub_account_id = job.sub_account_id
             LEFT JOIN account_finances fin ON acc.sub_account_id = fin.sub_account_id AND fin.user_id = ?
-            -- ▼▼▼ 最终修正: 在 JOIN 条件中加入 COLLATE 来统一字符集规则 ▼▼▼
-            LEFT JOIN link_change_jobs lcj ON acc.sub_account_name = lcj.sub_account_name COLLATE utf8mb4_unicode_ci AND lcj.user_id = ?
-            -- ▲▲▲ 最终修正 ▲▲▲
             WHERE acc.user_id = ?;
         `;
-
-        const [accounts] = await client.query(baseSql, [userId, userId, userId, userId, userId]);
-
-        // ... 后续代码完全不变 ...
+        const [accounts] = await client.query(baseSql, [userId, userId, userId, userId]);
 
         if (accounts.length === 0) {
             return res.send({
@@ -73,26 +65,43 @@ exports.getAdAccountsDashboard = async (req, res) => {
                 }
             });
         }
+
+        // 2. 批量查询: 一次性获取所有账户在指定时间范围内的历史消费
         const accountIds = accounts.map(a => a.sub_account_id);
         const historicalSpendSql = `
-            SELECT sub_account_id, SUM(cost_micros) as historical_spend, SUM(clicks) as historical_clicks
-            FROM ads_historical_performance WHERE user_id = ? AND sub_account_id IN (?) AND data_date BETWEEN ? AND ?
+            SELECT
+                sub_account_id,
+                SUM(cost_micros) as historical_spend,
+                SUM(clicks) as historical_clicks
+            FROM ads_historical_performance
+            WHERE user_id = ? AND sub_account_id IN (?) AND data_date BETWEEN ? AND ?
             GROUP BY sub_account_id;
         `;
         const [spendData] = await client.query(historicalSpendSql, [userId, accountIds, finalStartDate, finalEndDate]);
         const spendMap = new Map(spendData.map(item => [item.sub_account_id, {
             spend: parseFloat(item.historical_spend) || 0,
-            clicks: parseInt(item.historical_clicks) || 0
+            clicks: parseInt(item.historical_clicks) || 0,
         }]));
+
+        // 3. 批量查询: 一次性获取所有关联联盟账户的佣金
         const affiliateAccounts = accounts.map(a => a.affiliate_account).filter(Boolean);
         let commissionMap = new Map();
         if (affiliateAccounts.length > 0) {
             const commissionSql = `
-                SELECT uid, SUM(sale_comm) as total_commission, COUNT(*) as total_conversions
-                FROM transactions WHERE user_id = ? AND uid IN (?) AND order_time BETWEEN ? AND ?
+                SELECT
+                    uid,
+                    SUM(sale_comm) as total_commission,
+                    COUNT(*) as total_conversions
+                FROM transactions
+                WHERE user_id = ? AND uid IN (?) AND order_time BETWEEN ? AND ?
                 GROUP BY uid;
             `;
-            const [commissionData] = await client.query(commissionSql, [userId, affiliateAccounts, moment(finalStartDate).startOf('day').format('YYYY-MM-DD HH:mm:ss'), moment(finalEndDate).endOf('day').format('YYYY-MM-DD HH:mm:ss')]);
+            const [commissionData] = await client.query(commissionSql, [
+                userId,
+                affiliateAccounts,
+                moment(finalStartDate).startOf('day').format('YYYY-MM-DD HH:mm:ss'),
+                moment(finalEndDate).endOf('day').format('YYYY-MM-DD HH:mm:ss')
+            ]);
             commissionData.forEach(item => {
                 commissionMap.set(item.uid, {
                     commission: parseFloat(item.total_commission) || 0,
@@ -100,6 +109,8 @@ exports.getAdAccountsDashboard = async (req, res) => {
                 });
             });
         }
+
+        // 4. 组装最终数据
         const finalData = accounts.map(acc => {
             const historical = spendMap.get(acc.sub_account_id) || {
                 spend: 0,
@@ -109,21 +120,32 @@ exports.getAdAccountsDashboard = async (req, res) => {
                 commission: 0,
                 conversions: 0
             };
+
+            // ▼▼▼ [修改点 2] 核心覆盖逻辑 ▼▼▼
             let final_account_status = acc.account_status;
             let final_daily_budget = parseFloat(acc.daily_budget_default) || 0;
             let final_target_region_json = acc.target_region_json_default;
+
+            // 如果存在待处理的任务，并且 payload 不为空，则用 payload 的数据覆盖默认值
             if (acc.job_status === 'PENDING_UPDATE' && acc.job_payload) {
                 try {
                     const jobPayload = (typeof acc.job_payload === 'string') ? JSON.parse(acc.job_payload) : acc.job_payload;
+
+                    // 使用 payload 的值
                     final_account_status = jobPayload.campaignStatus || final_account_status;
                     final_daily_budget = jobPayload.budget !== undefined ? parseFloat(jobPayload.budget) : final_daily_budget;
+
+                    // 如果 payload 中有 locations，将其转换为 JSON 字符串以匹配原有数据结构
                     if (jobPayload.locations !== undefined) {
                         final_target_region_json = JSON.stringify(jobPayload.locations);
                     }
+
                 } catch (e) {
                     console.error(`解析 job_payload 失败, sub_account_id: ${acc.sub_account_id}`, e);
                 }
             }
+            // ▲▲▲ 核心覆盖逻辑结束 ▲▲▲
+
             const historicalClicks = historical.clicks;
             const historicalCVR = historicalClicks > 0 ? (commissionInfo.conversions / historicalClicks) * 100 : 0;
             const todayClicks = acc.today_clicks || 0;
@@ -134,20 +156,24 @@ exports.getAdAccountsDashboard = async (req, res) => {
             const initialBalance = parseFloat(acc.initial_balance) || 0;
             const totalRecharge = parseFloat(acc.total_recharge) || 0;
             const balance = (initialBalance + totalRecharge) - historicalSpend - realtimeSpend;
+
+            // 解析最终的 target_region (这段逻辑来自您的代码)
             let targetRegion = null;
-            const rawValue = final_target_region_json;
+            const rawValue = final_target_region_json; // 使用我们处理过的最终值
+
             if (rawValue) {
-                try {
-                    targetRegion = JSON.parse(rawValue);
-                } catch (e) {
-                    if (typeof rawValue === 'object') {
-                        targetRegion = rawValue;
-                    } else {
-                        console.error(`解析target_region_json失败, sub_account_id: ${acc.sub_account_id}. 原始值:`, rawValue);
+                if (typeof rawValue === 'string') {
+                    try {
+                        targetRegion = JSON.parse(rawValue);
+                    } catch (e) {
+                        console.error(`解析target_region_json字符串失败, sub_account_id: ${acc.sub_account_id}. 原始值:`, rawValue);
                         targetRegion = null;
                     }
+                } else if (Array.isArray(rawValue)) {
+                    targetRegion = rawValue;
                 }
             }
+
             return {
                 id: acc.id,
                 sub_account_name: acc.sub_account_name,
@@ -171,16 +197,15 @@ exports.getAdAccountsDashboard = async (req, res) => {
                 historical_cvr: historicalCVR.toFixed(2),
                 commission: commissionInfo.commission,
                 roi: roi === Infinity ? 'inf' : roi.toFixed(2),
-                campaigns_data: acc.campaigns_data,
-                link_job_id: acc.link_job_id,
-                change_interval_minutes: acc.change_interval_minutes,
             };
         });
+
         res.send({
             status: 0,
             message: '获取看板数据成功！',
             data: finalData
         });
+
     } catch (error) {
         console.error("获取Ads子账户看板数据时出错:", error);
         res.cc(error);
@@ -188,27 +213,24 @@ exports.getAdAccountsDashboard = async (req, res) => {
         if (client) client.release();
     }
 };
-
 /**
  * @function updateAdAccount
- * @description 在表格内修改子账户状态、预算、地区等，并创建待处理指令。
- * 新增逻辑：同时更新 link_change_jobs 表中的换链间隔时间。
+ * @description 在表格内修改子账户状态、预算、地区等，并创建待处理指令
  */
+// 主要处理函数：智能更新广告账户任务
 exports.updateAdAccount = async (req, res) => {
-    // ▼▼▼ 核心修改 1: 从请求体中接收新增的字段 ▼▼▼
+    // 从请求体中获取数据
     const {
         sub_account_id,
         account_status,
         daily_budget,
-        target_region,
-        link_job_id, // 新增：接收要更新的 link_change_jobs 的 ID
-        change_interval_minutes // 新增：接收新的换链间隔时间
+        target_region
     } = req.body;
-    // ▲▲▲ 核心修改 1 结束 ▲▲▲
-
+    // ▼▼▼【修改点 1】从 req.user 对象中获取当前登录用户的 ID ▼▼▼
     const userId = req.user.id;
     let client;
 
+    // 检查 userId 是否成功获取
     if (!userId) {
         return res.cc('无法获取用户信息，请检查登录状态');
     }
@@ -217,8 +239,6 @@ exports.updateAdAccount = async (req, res) => {
         client = await db.getClient();
         await client.beginTransaction();
 
-        // --- 原有逻辑部分：更新或创建 ad_creation_jobs ---
-        // (这部分逻辑保持不变)
         const updatesForPayload = {
             campaignStatus: account_status,
             budget: daily_budget,
@@ -226,84 +246,92 @@ exports.updateAdAccount = async (req, res) => {
         };
         const jobStatus = 'PENDING_UPDATE';
         const actionType = 'UPDATE';
+
         const checkJobSql = 'SELECT * FROM ad_creation_jobs WHERE sub_account_id = ? ORDER BY created_at DESC LIMIT 1';
         const [existingJobs] = await client.query(checkJobSql, [sub_account_id]);
 
         if (existingJobs.length > 0) {
+            // --- 分支逻辑 A：更新现有任务 ---
+            // (这部分逻辑不需要 user_id，保持不变)
+            console.log(`找到子账户 ${sub_account_id} 的现有任务，执行更新...`);
             const existingJob = existingJobs[0];
-            let existingPayload = (typeof existingJob.payload === 'string') ? JSON.parse(existingJob.payload) : existingJob.payload;
-            if (typeof existingPayload !== 'object' || existingPayload === null) {
+
+            let existingPayload;
+            if (typeof existingJob.payload === 'string') {
+                existingPayload = JSON.parse(existingJob.payload);
+            } else if (typeof existingJob.payload === 'object' && existingJob.payload !== null) {
+                existingPayload = existingJob.payload;
+            } else {
                 throw new Error('数据库中的 payload 字段格式未知或为 null');
             }
+
             const newPayload = {
                 ...existingPayload,
                 ...updatesForPayload
             };
+
             const updateSql = 'UPDATE ad_creation_jobs SET payload = ?, status = ?, action_type = ?, updated_at = NOW() WHERE id = ?';
             const [updateResults] = await client.query(updateSql, [JSON.stringify(newPayload), jobStatus, actionType, existingJob.id]);
-            if (updateResults.affectedRows !== 1) throw new Error('更新 ad_creation_jobs 失败');
+
+            if (updateResults.affectedRows !== 1) {
+                throw new Error('更新任务失败，数据库操作未影响任何行');
+            }
+
+            await client.commit();
+            res.send({
+                status: 0,
+                message: '广告任务已更新成功'
+            });
+
         } else {
+            // --- 分支逻辑 B：新建任务 ---
+            console.log(`未找到子账户 ${sub_account_id} 的现有任务，执行新建...`);
+
             const getCampaignDataSql = 'SELECT campaigns_data FROM google_ads_accounts WHERE sub_account_id = ?';
             const [accounts] = await client.query(getCampaignDataSql, [sub_account_id]);
+
             if (accounts.length === 0) {
                 await client.rollback();
                 return res.cc('找不到对应的 google_ads_accounts 记录');
             }
-            let campaignsData = (typeof accounts[0].campaigns_data === 'string') ? JSON.parse(accounts[0].campaigns_data) : accounts[0].campaigns_data;
+
+            let campaignsData;
+            if (typeof accounts[0].campaigns_data === 'string') {
+                campaignsData = JSON.parse(accounts[0].campaigns_data);
+            } else {
+                campaignsData = accounts[0].campaigns_data;
+            }
+
             const basePayload = transformCampaignDataToPayload(campaignsData);
             const finalPayload = {
                 ...basePayload,
                 ...updatesForPayload
             };
+
+            // ▼▼▼【修改点 2】在 INSERT 语句中增加 user_id 字段和值 ▼▼▼
             const insertSql = 'INSERT INTO ad_creation_jobs (user_id, sub_account_id, payload, status, action_type) VALUES (?, ?, ?, ?, ?)';
             const [insertResults] = await client.query(insertSql, [userId, sub_account_id, JSON.stringify(finalPayload), jobStatus, actionType]);
-            if (insertResults.affectedRows !== 1) throw new Error('创建 ad_creation_jobs 失败');
-        }
-        // --- 原有逻辑部分结束 ---
 
-
-        // ▼▼▼ 核心修改 2: 新增更新 link_change_jobs 的逻辑 ▼▼▼
-        // 只有当 link_job_id 存在且是一个有效数字时，才执行更新操作
-        if (link_job_id && !isNaN(parseInt(link_job_id))) {
-
-            // 根据账户状态决定 change_interval_minutes 的值
-            // 如果是 ENABLED，则使用前端传来的值
-            // 如果是 PAUSED，则将其设置为 NULL (清空)
-            const intervalValue = (account_status === 'ENABLED') ? change_interval_minutes : null;
-
-            const updateLinkJobSql = `
-                UPDATE link_change_jobs 
-                SET change_interval_minutes = ? 
-                WHERE id = ? AND user_id = ?
-            `;
-
-            const [linkJobUpdateResult] = await client.query(updateLinkJobSql, [intervalValue, link_job_id, userId]);
-
-            // 可选的检查：确认更新是否成功
-            if (linkJobUpdateResult.affectedRows !== 1) {
-                // 如果 link_job_id 确实存在但更新失败，可以抛出错误来回滚整个事务
-                console.warn(`警告: link_change_jobs 中 ID 为 ${link_job_id} 的记录未被更新 (可能不存在或 user_id 不匹配)`);
-                // 或者根据业务严格性，决定是否抛出错误
-                // throw new Error(`更新 link_change_jobs 记录 (ID: ${link_job_id}) 失败`);
+            if (insertResults.affectedRows !== 1) {
+                throw new Error('创建新任务失败，数据库操作未影响任何行');
             }
-        }
-        // ▲▲▲ 核心修改 2 结束 ▲▲▲
 
-        await client.commit();
-        res.send({
-            status: 0,
-            message: '广告任务更新与换链设置均已成功提交'
-        });
+            await client.commit();
+            res.send({
+                status: 0,
+                message: '新的广告任务已创建成功'
+            });
+        }
 
     } catch (error) {
         if (client) await client.rollback();
         console.error("更新广告任务时出错:", error);
         res.cc(error);
+
     } finally {
         if (client) client.release();
     }
 };
-
 /**
  * @function manageBalance
  * @description 设置初始余额或充值，并自动处理货币转换
