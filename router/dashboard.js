@@ -1,11 +1,6 @@
-// =======================================================================
-// 文件: router/dashboard.js
-// 作用: 定义与Linkbux数据看板相关的API路由。
-// =======================================================================
-
 const express = require('express');
 const router = express.Router();
-const dashboardHandler = require('../router_handler/dashboard.js');
+const dashboardHandler = require('../router_handler/dashboard');
 
 // 定义获取左上板块核心指标的路由
 // GET /api/dashboard/top-left-metrics?startDate=YYYY-MM-DD&endDate=YYYY-MM-DD

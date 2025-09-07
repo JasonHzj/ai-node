@@ -1,10 +1,3 @@
-// =======================================================================
-// 文件: router_handler/ai.js (已应用详细日志输出功能)
-// 作用: 包含调用AI执行“创作+翻译”任务的业务逻辑。
-// 核心改动: 1. 在请求AI修正前，详细打印出每一条不合规内容的具体问题。
-//           2. 让开发者能清晰地看到是长度超标，还是符号错误，或是两者都有。
-// =======================================================================
-
 const axios = require('axios');
 const config = require('../config');
 const db = require('../db');
@@ -91,15 +84,15 @@ After generating the ad copy, translate every single piece of it into Chinese fo
 You MUST return the result in a strict JSON format with three main keys: "headlines", "descriptions", and "callouts".
 
 1.  **"headlines"**: An array of 15 objects.
-    * Each object must have two keys: \`original\` (in **${language}**, max 30 characters, **NO symbols or punctuation allowed**) and \`translation_zh\`.
+    * Each object must have two keys: \`original\` (in **${language}**, strictly limited to a maximum of 25 characters, **and all symbols or punctuation are absolutely forbidden**) and \`translation_zh\`.
     * Headlines must be designed for effective random combination.
 
 2.  **"descriptions"**: An array of 4 objects.
-    * Each object must have two keys: \`original\` (in **${language}**, max 90 characters) and \`translation_zh\`.
+    * Each object must have two keys: \`original\` (in **${language}**,strictly limited to a maximum of 80 characters, **and any symbols or punctuation, except for , ., and !, are absolutely forbidden**) and \`translation_zh\`.
     * **Allowed punctuation is limited to: comma, question mark, exclamation mark, semicolon.** No other symbols are permitted.
 
 3.  **"callouts"**: An array of 4 objects.
-    * Each object has two keys: \`original\` (in **${language}**, max 25 characters) and \`translation_zh\`.
+    * Each object has two keys: \`original\` (in **${language}**, strictly limited to a maximum of 20 characters) and \`translation_zh\`.
 
 **Strict Adherence to Policy:**
 You must strictly follow all Google Ads policies.`;

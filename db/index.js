@@ -1,5 +1,3 @@
-// 文件: db/index.js (最终解决方案 - 自动重连)
-
 const {
     Client
 } = require('ssh2');
@@ -14,20 +12,20 @@ let isConnecting = false; // 状态锁，防止并发重连
 const localPort = 3307;
 
 const sshConfig = {
-    host: process.env.SSH_HOST,
-    port: process.env.SSH_PORT,
-    username: process.env.SSH_USER,
-    password: process.env.SSH_PASSWORD,
+    host: "47.77.196.188",
+    port: "22",
+    username: "root",
+    password: "x&UGGQ#x%0&L",
     readyTimeout: 20000, // 增加SSH连接超时
     keepaliveInterval: 15000 // 缩短心跳间隔
 };
 
 const dbConfig = {
-    host: process.env.DB_HOST,
-    port: process.env.DB_PORT,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME
+    host: "127.0.0.1",
+    port: "3306",
+    user: "ads_shuaru_com",
+    password: "adphcwkAFXsAFsZD",
+    database: "ads_shuaru_com"
 };
 
 const initializePool = async () => {
@@ -125,8 +123,28 @@ const getClient = async () => {
     }
     return await pool.getConnection();
 };
+// --- ▼▼▼ 新增的功能函数 ▼▼▼ ---
+const closePool = async () => {
+    if (pool) {
+        await pool.end();
+        pool = null;
+        console.log('数据库连接池已关闭。');
+    }
+    if (sshClient) {
+        sshClient.end();
+        sshClient = null;
+        console.log('SSH 客户端已断开。');
+    }
+    if (localTcpServer) {
+        localTcpServer.close();
+        localTcpServer = null;
+        console.log('本地 TCP 服务器已停止。');
+    }
+};
+// --- ▲▲▲ 新增结束 ▲▲▲ ---
 
 module.exports = {
     initializePool,
-    getClient
+    getClient,
+    closePool
 };

@@ -1,12 +1,7 @@
-// =======================================================================
-// 文件 2: router/ai.js (新的AI路由定义文件)
-// 作用: 定义与AI相关的URL路径。
-// =======================================================================
-
 const express = require('express');
 const router = express.Router();
 
-const aiHandler = require('../router_handler/ai.js');
+const aiHandler = require('../router_handler/ai');
 
 // 定义AI内容生成的路由
 // 客户端通过 POST 请求访问 /api/ai/generate 来调用AI

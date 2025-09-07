@@ -1,11 +1,6 @@
-// =======================================================================
-// 文件 2: router/user.js (用户路由定义)
-// 作用: 定义所有与用户相关的URL路径，并增加管理员权限校验。
-// =======================================================================
-
 const express = require('express');
 const router = express.Router();
-const userHandler = require('../router_handler/user.js');
+const userHandler = require('../router_handler/user');
 
 // 注册新用户
 router.post('/register', userHandler.register);

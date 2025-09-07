@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 
 // 导入路由处理函数模块
-const managementHandler = require('../router_handler/management.js');
+const managementHandler = require('../router_handler/management');
 
 // 定义获取换链接管理页面数据的路由
 router.get('/management_data', managementHandler.getLinkManagementData);

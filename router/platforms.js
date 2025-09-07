@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const platformsHandler = require('../router_handler/platforms.js');
+const platformsHandler = require('../router_handler/platforms');
 
 // 定义保存 Linkbux Token 的路由
 router.post('/platforms/linkbux/config', platformsHandler.saveLinkbuxConfig);

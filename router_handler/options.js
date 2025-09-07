@@ -56,7 +56,7 @@ exports.getLanguages = async (req, res) => {
 
 exports.getLanguagesForCountry = async (req, res) => {
     const countryId = req.params.countryId;
-    console.log(`--- 收到为国家ID [${countryId}] 获取语言列表的请求 ---`);
+    // console.log(`--- 收到为国家ID [${countryId}] 获取语言列表的请求 ---`);
     let client;
     try {
         client = await db.getClient();

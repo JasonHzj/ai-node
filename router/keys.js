@@ -1,11 +1,6 @@
-// =======================================================================
-// 第二步: 创建 router/keys.js (新的API密钥路由文件)
-// 作用: 定义与API密钥相关的URL路径。
-// =======================================================================
-
 const express = require('express');
 const router = express.Router();
-const keysHandler = require('../router_handler/keys.js');
+const keysHandler = require('../router_handler/keys');
 
 // 定义生成新API密钥的路由
 // 客户端通过 POST /api/keys 来为自己生成一个新密钥

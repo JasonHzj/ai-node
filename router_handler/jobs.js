@@ -1,28 +1,22 @@
-// =======================================================================
-// 文件: router_handler/jobs.js (已应用数据库连接池修复)
-// 作用: 处理所有广告任务的创建、读取、更新、删除等核心业务。
-// 核心改动: 为文件内的 *每一个* 数据库操作函数，包括辅助函数，
-//           都增加了完整的 try...catch...finally 结构来管理连接生命周期。
+// 文件: router_handler/jobs.js (最终修改版，与您的项目文件结构完全匹配)
+// 核心改动:
+// 1. 在 saveDraft 函数中集成了创建/更新/删除 link_change_jobs 的逻辑。
+// 2. 使用了数据库事务来确保数据一致性。
+// 3. 表名和字段名 (ad_creation_jobs, status) 均与您的代码保持一致。
 // =======================================================================
 
 const db = require('../db');
 const xlsx = require('xlsx');
 
-/**
- * @function getUserIdFromApiKey
- * @description (辅助函数) 通过API密钥获取用户ID，用于脚本身份验证。
- * @note 这是一个关键的修复点。此函数现在会自己管理连接的获取和释放。
- */
+
 const getUserIdFromApiKey = async (apiKey) => {
     if (!apiKey) {
         return {
             error: '请求中缺少API密钥'
         };
     }
-    let client; // 1. 声明 client
-
+    let client;
     try {
-        // 2. 获取连接
         client = await db.getClient();
         const keyCheckSql = 'SELECT user_id FROM user_api_keys WHERE api_key = ?';
         const [keys] = await client.query(keyCheckSql, [apiKey]);
@@ -40,12 +34,9 @@ const getUserIdFromApiKey = async (apiKey) => {
             error: '数据库查询API密钥时出错'
         };
     } finally {
-        // 3. 释放连接
         if (client) client.release();
     }
 };
-
-// --- 以下是面向前端用户的函数 ---
 
 exports.getJobs = async (req, res) => {
     console.log('--- 收到获取指令列表的请求 ---');
@@ -120,40 +111,125 @@ exports.importFromExcel = async (req, res) => {
     }
 };
 
+/**
+ * @function saveDraft (V2 - 集成换链接任务)
+ * @description 创建或更新一个广告任务草稿，并根据需要同步创建、更新或删除关联的换链接任务。
+ */
 exports.saveDraft = async (req, res) => {
+    const userId = req.user.id;
     const {
-        jobId,
+        // --- 原有字段 ---
+        jobId: existingJobId, // 重命名以区分
         subAccountId,
         actionType,
-        payload
+        payload,
+        // --- 新增字段 ---
+        enable_link_change,
+        affiliate_offer_link,
+        affiliate_offer_params,
+        change_interval_minutes,
+        referer_link
     } = req.body;
-    const userId = req.user.id;
-    console.log(`--- 用户 [${userId}] 正在保存草稿 ---`);
+
+    console.log(`--- 用户 [${userId}] 正在保存草稿 (换链接任务: ${enable_link_change ? '启用' : '禁用'}) ---`);
+    if (!subAccountId || !actionType || !payload) {
+        return res.cc('缺少必要的参数: subAccountId, actionType, payload');
+    }
+
     let client;
     try {
         client = await db.getClient();
+        await client.beginTransaction(); // <--- 开启事务
+
+        // --- 步骤 1: 创建或更新 ad_creation_jobs 表的主任务 ---
+        let jobId = existingJobId;
+        let message;
+
         const draftData = {
             user_id: userId,
             sub_account_id: subAccountId,
             action_type: actionType,
-            status: 'DRAFT',
-            payload: JSON.stringify(payload)
+            status: 'DRAFT', // 保存时总是重置为 DRAFT
+            payload: JSON.stringify(payload),
+            result_message: null // 清空之前的错误信息
         };
+
         if (jobId) {
+            // 更新现有任务
             const sql = 'UPDATE ad_creation_jobs SET ? WHERE id = ? AND user_id = ?';
             await client.query(sql, [draftData, jobId, userId]);
+            message = '广告草稿已成功更新！';
         } else {
+            // 插入新任务
             const sql = 'INSERT INTO ad_creation_jobs SET ?';
-            await client.query(sql, draftData);
+            const [createResult] = await client.query(sql, draftData);
+            jobId = createResult.insertId;
+            message = '广告草稿已成功创建！';
         }
+
+        // --- 步骤 2: 根据 enable_link_change 的状态，处理 link_change_jobs 表 ---
+        if (enable_link_change) {
+            // --- 2a: 如果启用了换链接，则创建或更新 ---
+            const getAccountInfoSql = 'SELECT manager_name, sub_account_name FROM google_ads_accounts WHERE sub_account_id = ? AND user_id = ?';
+            const [accounts] = await client.query(getAccountInfoSql, [subAccountId, userId]);
+            if (accounts.length === 0) throw new Error(`找不到ID为 ${subAccountId} 的账户信息。`);
+            const {
+                manager_name,
+                sub_account_name
+            } = accounts[0];
+
+          // ▼▼▼ 【V3 核心修复】处理默认国家 ▼▼▼
+          let proxy_country = 'US'; // 默认设置为 'US'
+          if (payload.locations && payload.locations.length > 0) {
+              const getCountryCodesSql = 'SELECT country_code FROM google_ads_countries WHERE criterion_id IN (?)';
+              const [countries] = await client.query(getCountryCodesSql, [payload.locations]);
+              if (countries.length > 0) {
+                  proxy_country = countries.map(c => c.country_code).join(',');
+              }
+          }
+          // ▲▲▲ 修复结束 ▲▲▲
+
+            const linkJobData = {
+                user_id: userId,
+                ad_job_id: jobId, // 关联主任务ID
+                mcc_name: manager_name,
+                sub_account_name: sub_account_name,
+                campaign_name: payload.campaignName,
+                affiliate_offer_link,
+                affiliate_offer_params,
+                advertiser_link: payload.adLink, // 广告主链接就是广告链接
+                proxy_country,
+                change_interval_minutes: change_interval_minutes || 10,
+                referer_link
+            };
+
+            const findLinkJobSql = 'SELECT id FROM link_change_jobs WHERE ad_job_id = ?';
+            const [existingLinkJobs] = await client.query(findLinkJobSql, [jobId]);
+
+            if (existingLinkJobs.length > 0) {
+                const updateLinkJobSql = 'UPDATE link_change_jobs SET ? WHERE id = ?';
+                await client.query(updateLinkJobSql, [linkJobData, existingLinkJobs[0].id]);
+            } else {
+                const createLinkJobSql = 'INSERT INTO link_change_jobs SET ?';
+                await client.query(createLinkJobSql, linkJobData);
+            }
+        } else {
+            // --- 2b: 如果未启用，则删除可能存在的旧记录 ---
+            const deleteLinkJobSql = 'DELETE FROM link_change_jobs WHERE ad_job_id = ?';
+            await client.query(deleteLinkJobSql, [jobId]);
+        }
+
+        await client.commit(); // <--- 提交事务
 
         const io = req.app.get('socketio');
         io.emit('jobs_updated', {
-            source: 'saveDraft'
+            source: 'saveDraft',
+            jobId
         });
+        res.cc(message, 0);
 
-        res.cc('草稿保存成功！', 0);
     } catch (error) {
+        if (client) await client.rollback(); // <--- 回滚事务
         console.error('保存草稿时发生错误:', error);
         res.cc(error);
     } finally {
@@ -161,6 +237,8 @@ exports.saveDraft = async (req, res) => {
     }
 };
 
+
+// ... (submitJobs, requestDeletion, requestBatchDeletion 等其他函数保持不变) ...
 exports.submitJobs = async (req, res) => {
     const {
         jobIds
@@ -251,8 +329,6 @@ exports.requestBatchDeletion = async (req, res) => {
         if (client) client.release();
     }
 };
-
-// --- 以下是专门供Ads脚本调用的函数 ---
 
 exports.getPendingJobs = async (req, res) => {
     const apiKey = req.headers['x-api-key'];

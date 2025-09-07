@@ -1,8 +1,6 @@
-// 文件: router/ads.js
-
 const express = require('express');
 const router = express.Router();
-const adsHandler = require('../router_handler/ads.js');
+const adsHandler = require('../router_handler/ads');
 
 // 定义接收Ads脚本数据的路由
 // 脚本应该向 /api/ads/receive-data 发送POST请求

@@ -1,3 +1,12 @@
+const {
+   verifyLicense
+} = require('./license-validator');
+try {
+   verifyLicense();
+} catch (error) {
+   console.error('Initialization failed:', error);
+   process.exit(1);
+}
 require('dotenv').config(); // <-- 确保这是文件的第一行或最顶部的几行之一
 const express = require('express');
 const db = require('./db'); // <--- 新增这一行，导入我们重写后的db模块
@@ -184,6 +193,7 @@ app.use((err, req, res, next) => {
 
 async function startServer() {
    try {
+      verifyLicense(); // <--- 新增：在所有操作之前，首先执行许可证校验
       await db.initializePool();
 
       const port = process.env.PORT_ORIGIN || 3006;

@@ -523,13 +523,11 @@ function getDomainFromUrl(url) {
 // =======================================================================
 // 文件: router_handler/dashboard.js
 // 替换函数: getDashboardOfferList
-// 修正:
-// 1. 严格遵循用户提供的原始代码结构和SQL逻辑，不再进行优化。
-// 2. 新增一个独立的SQL查询来获取真实花费，解决了UNION字符集错误。
-// 3. 在原始代码的循环中，无缝替换了 spend 和 roi 的计算逻辑，并集成了智能容错。
-// 4. 为所有相关查询增加了 platform 平台筛选。
+// 终极修正版: 
+// 1. 修正了 if (adId) 分支被错误覆盖的SQL语句。
+// 2. 将最终的去重方案正确应用到 else 分支。
+// 3. 确保了两个分支的 SQL 和参数列表完全正确。
 // =======================================================================
-
 exports.getDashboardOfferList = async (req, res) => {
     // 新增 platform 参数
     const {
@@ -549,9 +547,9 @@ exports.getDashboardOfferList = async (req, res) => {
     try {
         client = await db.getClient();
 
-        // --- 1. SQL查询准备 (完全沿用您原来的逻辑) ---
+        // --- 1. SQL查询准备 ---
         let mainSql, mainSqlParams, dailyTrendSql, dailyTrendSqlParams;
-        let duration = 3650; // 搜索模式下给一个超长的默认天数, 避免cvr计算错误
+        let duration = 3650; // 搜索模式下给一个超长的默认天数
 
         // 平台缩写匹配
         const platformAbbreviations = {
@@ -566,7 +564,7 @@ exports.getDashboardOfferList = async (req, res) => {
 
         if (adId) {
             // =============================================
-            //  模式一: 按广告ID搜索 (与您原来逻辑一致, 增加了platform筛选)
+            //  模式一: 按广告ID搜索 (已修正为正确的SQL)
             // =============================================
             mainSql = `
                 SELECT
@@ -579,7 +577,16 @@ exports.getDashboardOfferList = async (req, res) => {
                     COALESCE(tc.total_commission, 0) as total_commission,
                     0 as previous_commission,
                     tc.multi_account_commissions
-                FROM ads a
+                FROM (
+                    SELECT
+                        merchant_name,
+                        platform_ad_id,
+                        tracking_url
+                    FROM ads
+                    WHERE user_id = ? AND platform_ad_id = ?
+                    GROUP BY platform_ad_id, merchant_name, tracking_url
+                    LIMIT 1
+                ) a
                 LEFT JOIN (
                     SELECT platform_ad_id, COUNT(*) as clicks FROM clicks
                     WHERE user_id = ? AND platform_ad_id = ? GROUP BY platform_ad_id
@@ -601,10 +608,13 @@ exports.getDashboardOfferList = async (req, res) => {
                         GROUP BY t.platform_ad_id, pa.account_name
                     ) AS account_level_summary
                     GROUP BY platform_ad_id
-                ) AS tc ON a.platform_ad_id = tc.platform_ad_id
-                WHERE a.user_id = ? AND a.platform_ad_id = ?;
+                ) AS tc ON a.platform_ad_id = tc.platform_ad_id;
             `;
-            mainSqlParams = [userId, adId, userId, platform, adId, userId, adId];
+            mainSqlParams = [
+                userId, adId, // for 'a' subquery
+                userId, adId, // for 'cc' subquery
+                userId, platform, adId // for 'tc' subquery
+            ];
 
             dailyTrendSql = `
                 SELECT
@@ -620,7 +630,7 @@ exports.getDashboardOfferList = async (req, res) => {
 
         } else {
             // =============================================
-            //  模式二: 按日期范围查询 (与您原来逻辑一致, 增加了platform筛选)
+            //  模式二: 按日期范围查询 (已修正为正确的SQL)
             // =============================================
             const currentStart = moment(startDate).startOf('day');
             const currentEnd = moment(endDate).endOf('day');
@@ -647,7 +657,15 @@ exports.getDashboardOfferList = async (req, res) => {
                     SELECT DISTINCT platform_ad_id FROM transactions
                     WHERE user_id = ? AND platform = ? AND order_time BETWEEN ? AND ?
                 ) AS active_ads
-                JOIN ads a ON active_ads.platform_ad_id = a.platform_ad_id AND a.user_id = ?
+                LEFT JOIN (
+                    SELECT
+                        platform_ad_id,
+                        MAX(merchant_name) as merchant_name,
+                        MAX(tracking_url) as tracking_url
+                    FROM ads
+                    WHERE user_id = ?
+                    GROUP BY platform_ad_id
+                ) a ON active_ads.platform_ad_id = a.platform_ad_id
                 LEFT JOIN (
                     SELECT platform_ad_id, COUNT(*) as clicks FROM clicks
                     WHERE user_id = ? AND created_at BETWEEN ? AND ?
@@ -678,11 +696,11 @@ exports.getDashboardOfferList = async (req, res) => {
                 ) AS tp ON a.platform_ad_id = tp.platform_ad_id;
             `;
             mainSqlParams = [
-                userId, platform, currentStartTime, currentEndTime,
-                userId,
-                userId, currentStartTime, currentEndTime,
-                userId, platform, currentStartTime, currentEndTime,
-                userId, platform, previousStartTime, previousEndTime
+                userId, platform, currentStartTime, currentEndTime, // for 'active_ads'
+                userId, // for 'a'
+                userId, currentStartTime, currentEndTime, // for 'cc'
+                userId, platform, currentStartTime, currentEndTime, // for 'tc_trans'
+                userId, platform, previousStartTime, previousEndTime // for 'tp'
             ];
 
             dailyTrendSql = `
@@ -701,6 +719,10 @@ exports.getDashboardOfferList = async (req, res) => {
         const [mainData] = await client.query(mainSql, mainSqlParams);
         const [dailyTrendData] = await client.query(dailyTrendSql, dailyTrendSqlParams);
 
+        // ... 后续的数据处理逻辑完全不变 ...
+        // [
+        //   ... The rest of your function remains the same ...
+        // ]
         if (!mainData || mainData.length === 0) {
             return res.send({
                 status: 0,
@@ -713,11 +735,11 @@ exports.getDashboardOfferList = async (req, res) => {
         }
 
         // --- 2. 新增：独立查询所有相关广告的真实花费 ---
-        const relevantAdIds = mainData.map(offer => offer.platform_ad_id);
+        const relevantAdIds = [...new Set(mainData.map(offer => offer.platform_ad_id))];
         const spendSql = `
-            SELECT 
+            SELECT
                 advertiser_id,
-                SUM(CASE 
+                SUM(CASE
                     WHEN currency_code = 'CNY' THEN (cost_micros / 1000000) * 0.14
                     WHEN currency_code = 'HKD' THEN (cost_micros / 1000000) * 0.13
                     ELSE (cost_micros / 1000000)
@@ -769,13 +791,11 @@ exports.getDashboardOfferList = async (req, res) => {
             let clicks = parseInt(offer.clicks) || 0;
             const conversions = parseInt(offer.conversions) || 0;
 
-            // ▼▼▼ 核心修改 ▼▼▼
             let spend = spendMap.get(offer.platform_ad_id);
             if (spend === undefined) {
                 spend = currentTotalCommission > 0 ? currentTotalCommission / 4 : 0;
             }
             const roi = spend > 0 ? (currentTotalCommission - spend) / spend : (currentTotalCommission > 0 ? Infinity : 0);
-            // ▲▲▲ 核心修改结束 ▲▲▲
 
             totalSpend += spend;
             totalCommissionSum += currentTotalCommission;
@@ -807,8 +827,18 @@ exports.getDashboardOfferList = async (req, res) => {
             };
         });
 
+        // 新增一个去重步骤，作为最终保险
+        const finalOffers = [];
+        const seenAdIds = new Set();
+        for (const offer of processedOffers) {
+            if (!seenAdIds.has(offer.ad_id)) {
+                seenAdIds.add(offer.ad_id);
+                finalOffers.push(offer);
+            }
+        }
+
         if (!adId) {
-            processedOffers.sort((a, b) => {
+            finalOffers.sort((a, b) => {
                 const sumA = a.pending_commission + a.rejected_commission;
                 const sumB = b.pending_commission + b.rejected_commission;
                 return sumB - sumA;
@@ -823,7 +853,7 @@ exports.getDashboardOfferList = async (req, res) => {
             data: {
                 global_roi: globalRoi,
                 all_account_names: Array.from(allAccountNames),
-                offers: processedOffers
+                offers: finalOffers // 返回去重后的数组
             }
         });
 
@@ -966,21 +996,24 @@ exports.getRightPanelSummary = async (req, res) => {
                 // --- 4. 分别查询佣金和花费 ---
                 // 查询佣金数据
                 const summarySql = `
-            SELECT
-                t.platform_account_id as account_id,
-                -- ... (省略了所有SUM CASE语句，与您原来的一致)
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? THEN t.sale_comm ELSE 0 END) as total_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Approved' THEN t.sale_comm ELSE 0 END) as approved_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Pending' THEN t.sale_comm ELSE 0 END) as pending_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Rejected' THEN t.sale_comm ELSE 0 END) as rejected_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? THEN t.sale_comm ELSE 0 END) as previous_total_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Approved' THEN t.sale_comm ELSE 0 END) as previous_approved_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Pending' THEN t.sale_comm ELSE 0 END) as previous_pending_commission,
-                SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Rejected' THEN t.sale_comm ELSE 0 END) as previous_rejected_commission
-            FROM transactions t
-            WHERE t.user_id = ? AND t.platform = ? AND t.platform_account_id IN (?)
-            GROUP BY t.platform_account_id;
-        `;
+    SELECT
+        t.platform_account_id as account_id,
+        upa.account_name, -- <<<--- 新增这一行来直接获取账户名
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? THEN t.sale_comm ELSE 0 END) as total_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Approved' THEN t.sale_comm ELSE 0 END) as approved_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Pending' THEN t.sale_comm ELSE 0 END) as pending_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Rejected' THEN t.sale_comm ELSE 0 END) as rejected_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? THEN t.sale_comm ELSE 0 END) as previous_total_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Approved' THEN t.sale_comm ELSE 0 END) as previous_approved_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Pending' THEN t.sale_comm ELSE 0 END) as previous_pending_commission,
+        SUM(CASE WHEN t.order_time BETWEEN ? AND ? AND t.status = 'Rejected' THEN t.sale_comm ELSE 0 END) as previous_rejected_commission
+    FROM transactions t
+    -- <<<--- 新增 JOIN 子句 ---
+    JOIN user_platform_accounts upa ON t.platform_account_id = upa.id
+    WHERE t.user_id = ? AND t.platform = ? AND t.platform_account_id IN (?)
+    -- <<<--- 在 GROUP BY 中也加入 account_name ---
+    GROUP BY t.platform_account_id, upa.account_name; 
+`;
                 const [summaryData] = await client.query(summarySql, [
                     currentStartTime, currentEndTime, currentStartTime, currentEndTime, currentStartTime, currentEndTime, currentStartTime, currentEndTime,
                     previousStartTime, previousEndTime, previousStartTime, previousEndTime, previousStartTime, previousEndTime, previousStartTime, previousEndTime,

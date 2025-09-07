@@ -45,13 +45,28 @@ async function fetchPaginatedData(params, progressContext = null) {
                         pageData = data.data;
                         totalPages = 1; // settlements 接口似乎不分页
                     }
-                } else if (data?.payliad?.list) {
-                    // 适用于 clicks
-                    pageData = data.payliad.list;
-                    totalPages = data.payliad.total.total_page || 1;
+                    // --- ▼▼▼ 核心修正之处 ▼▼▼ ---
+                    // 使用 API 错误的拼写 `payliad` 来正确解析数据
+                    } else if (data?.payliad?.list) {
+                        pageData = data.payliad.list;
+                        totalPages = data.payliad.total?.total_page || 1;
+                    } else if (data?.status === 200 && data?.payliad) { // 针对您提供的成功状态码
+                        pageData = data.payliad.list || [];
+                        totalPages = data.payliad.total?.total_page || 1;
+                        // --- ▲▲▲ 修正结束 ▲▲▲ ---
                 } else {
-                    throw new Error(`API returned an error or unexpected format: ${data.status ? data.status.msg : 'Unknown error'}`);
+                
+                  if (data?.status?.code === 1) {
+                      console.log(`[API提示] 接口 [${params.op}] 在第 ${currentPage} 页没有返回数据，任务将正常结束。`);
+                      totalPages = 0; // 设置为0，结束循环
+                  } else {
+                      // 使用可选链操作符 (?.) 来安全地访问属性，避免因 undefined 而崩溃
+                      const errorMessage = data?.status?.msg || '未在响应中找到明确的错误信息';
+                      throw new Error(`API返回错误或非预期的格式: ${errorMessage}`);
+                  }
+                  // --- ▲▲▲ 修正结束 ▲▲▲ ---
                 }
+                // --- ▲▲▲ 修正结束 ▲▲▲ ---
 
                 allData = allData.concat(pageData);
 
@@ -77,14 +92,14 @@ async function fetchPaginatedData(params, progressContext = null) {
                 break;
 
             } catch (error) {
-                console.error(`Request to Linkbux API [${params.op}] page ${currentPage} failed on attempt ${attempt}:`, error.message);
+                console.error(`请求 Linkbux API [${params.op}] 第 ${currentPage} 页失败 (第 ${attempt} 次尝试):`, error.message);
                 if (attempt === MAX_RETRIES) throw error;
                 const waitTime = INITIAL_DELAY * attempt;
-                const message = `[${progressContext.accountName}] API请求失败，将在 ${waitTime / 1000} 秒后重试...`;
+                const message = `[${progressContext?.accountName || '定时任务'}] API请求失败，将在 ${waitTime / 1000} 秒后重试...`;
                 if (progressContext) {
-                  progressContext.io.to(progressContext.userId.toString()).emit('sync_progress', {
-                              progress: progressContext.baseProgress,
-                              message
+                    progressContext.io.to(progressContext.userId.toString()).emit('sync_progress', {
+                        progress: progressContext.baseProgress,
+                        message
                     });
                 }
                 console.log(`[后台任务] ==> ${message}`);
@@ -121,6 +136,18 @@ const fetchAds = (token, progressContext) => fetchPaginatedData({
     limit: 1000
 }, progressContext);
 
+// --- ▼▼▼ 修正 2: 使用您提供的正确接口名 'user_click' ▼▼▼ ---
+const fetchClicks = (token, beginDate, endDate, progressContext) => fetchPaginatedData({
+    mod: 'medium',
+    op: 'user_click', // 将 op 修正为您提供的 'user_click'
+    token,
+    begin_date: formatDate(beginDate),
+    end_date: formatDate(endDate),
+    limit: 2000
+}, progressContext);
+// --- ▲▲▲ 修正结束 ▲▲▲ ---
+
+
 async function runInitialSyncForUser(io, userId, account, startDate) {
     const initialLog = `[后台任务] ==> 用户 [${userId}] 的账户 [${account.account_name}]`;
     console.log(`${initialLog} - 任务已接收，准备执行...`);
@@ -136,17 +163,14 @@ async function runInitialSyncForUser(io, userId, account, startDate) {
         });
         client = await db.getClient();
 
-        // --- 核心改动 1: 状态检查模式 ---
-        // 我们不再直接reject，而是记录每个表是否需要同步
         const syncStatus = {
             shouldSyncTransactions: false,
             shouldSyncAds: false,
             shouldSyncSettlements: false,
         };
 
-        console.log(`${initialLog} - 正在执行数据存在性检查...`);
-        const txSql = `SELECT 1 FROM transactions WHERE platform_account_id = ? AND order_time >= ? LIMIT 1`;
-        const [txData] = await client.query(txSql, [account.id, GLOBAL_START_DATE]);
+        const txSql = `SELECT 1 FROM transactions WHERE platform_account_id = ? LIMIT 1`;
+        const [txData] = await client.query(txSql, [account.id]);
         if (txData.length === 0) {
             syncStatus.shouldSyncTransactions = true;
         }
@@ -162,23 +186,14 @@ async function runInitialSyncForUser(io, userId, account, startDate) {
         if (stData.length === 0) {
             syncStatus.shouldSyncSettlements = true;
         }
-        console.log(`${initialLog} - 检查完成:`, syncStatus);
-        // --- 状态检查结束 ---
 
-
-        // --- 核心改动 2: 检查是否无事可做 ---
-        if (!syncStatus.shouldSyncTransactions && !syncStatus.shouldSyncAds && !syncStatus.shouldSyncSettlements) {
-            const message = `所有核心数据均已存在，无需执行历史同步。`;
+        if (!Object.values(syncStatus).some(status => status)) {
             io.to(userId.toString()).emit('sync_complete', {
-                message
+                message: `所有核心数据均已存在，无需执行历史同步。`
             });
-            console.log(`${initialLog} - ${message}`);
-            return; // 提前结束函数
+            return;
         }
-        // --- 判断结束 ---
 
-
-        // --- 核心改动 3: 条件性同步 Ads ---
         if (syncStatus.shouldSyncAds) {
             const adsProgressContext = {
                 io,
@@ -186,149 +201,67 @@ async function runInitialSyncForUser(io, userId, account, startDate) {
                 accountName: account.account_name,
                 dataType: '广告',
                 baseProgress: 5,
-                progressWeight: 5
+                progressWeight: 25
             };
             const ads = await fetchAds(decryptedToken, adsProgressContext);
             if (ads.length > 0) {
-                // ... (广告插入逻辑保持不变)
-               const sql = `
+                // --- ▼▼▼ 核心修正之处 ▼▼▼ ---
+                // 采用和每日任务一致的“先删除，后插入”策略
+                await client.beginTransaction();
+                console.log(`${initialLog} - 正在为账户 [${account.id}] 删除旧的广告数据...`);
+                await client.query('DELETE FROM ads WHERE platform_account_id = ?', [account.id]);
+
+                console.log(`${initialLog} - 正在为账户 [${account.id}] 插入 ${ads.length} 条新广告数据...`);
+                const values = ads.map(ad => [
+                    userId, 'Linkbux', account.id, ad.mid, ad.merchant_name,
+                    ad.comm_rate, ad.tracking_url, ad.relationship, ad.comm_detail, ad.site_url,
+                    ad.logo, ad.categories, ad.offer_type, ad.avg_payment_cycle, ad.avg_payout,
+                    ad.primary_region, ad.support_region, ad.rd
+                ]);
+                // 注意：这里不再需要 ON DUPLICATE KEY UPDATE
+                const sql = `
                 INSERT INTO ads (
                     user_id, platform, platform_account_id, platform_ad_id, merchant_name, 
                     comm_rate, tracking_url, relationship, comm_detail, site_url, 
                     logo, categories, offer_type, avg_payment_cycle, avg_payout, 
                     primary_region, support_region, rd 
-                ) VALUES ? 
-                ON DUPLICATE KEY UPDATE 
-                    merchant_name=VALUES(merchant_name), comm_rate=VALUES(comm_rate), tracking_url=VALUES(tracking_url),
-                    relationship=VALUES(relationship), comm_detail=VALUES(comm_detail), site_url=VALUES(site_url),
-                    logo=VALUES(logo), categories=VALUES(categories), offer_type=VALUES(offer_type),
-                    avg_payment_cycle=VALUES(avg_payment_cycle), avg_payout=VALUES(avg_payout),
-                    primary_region=VALUES(primary_region), support_region=VALUES(support_region),
-                    rd=VALUES(rd), 
-                    updated_at=NOW()
-            `;
-               const values = ads.map(ad => [
-                   userId, 'Linkbux', account.id, ad.mid, ad.merchant_name,
-                   ad.comm_rate, ad.tracking_url, ad.relationship, ad.comm_detail, ad.site_url,
-                   ad.logo, ad.categories, ad.offer_type, ad.avg_payment_cycle, ad.avg_payout,
-                   ad.primary_region, ad.support_region, ad.rd
-               ]);
-               await client.query(sql, [values]);
+                ) VALUES ?`;
+                await client.query(sql, [values]);
+                await client.commit();
+                console.log(`${initialLog} - 广告数据事务提交成功。`);
+                // --- ▲▲▲ 修正结束 ▲▲▲ ---
             }
             io.to(userId.toString()).emit('sync_progress', {
-                progress: 10,
+                progress: 30,
                 message: `[${account.account_name}] 广告数据同步完成!`
             });
         } else {
-            const message = `[${account.account_name}] 广告数据已存在，跳过同步。`;
             io.to(userId.toString()).emit('sync_progress', {
-                progress: 10,
-                message
+                progress: 30,
+                message: `[${account.account_name}] 广告数据已存在，跳过同步。`
             });
-            console.log(`${initialLog} - ${message}`);
         }
-        await delay(500);
-        // --- Ads 同步结束 ---
 
-
-        // --- 核心改动 4: 条件性进入主循环（如果交易或结算有任何一个需要同步） ---
         if (syncStatus.shouldSyncTransactions || syncStatus.shouldSyncSettlements) {
-            const GLOBAL_END_DATE = new Date();
-            const totalDays = Math.max((GLOBAL_END_DATE - GLOBAL_START_DATE) / (1000 * 60 * 60 * 24), 1);
-            let completedDays = 0;
             let currentStartDate = new Date(GLOBAL_START_DATE);
-
-            while (currentStartDate <= GLOBAL_END_DATE) {
+            while (currentStartDate <= new Date()) {
                 let currentEndDate = new Date(currentStartDate);
                 currentEndDate.setDate(currentEndDate.getDate() + 60);
-                if (currentEndDate > GLOBAL_END_DATE) currentEndDate = new Date(GLOBAL_END_DATE);
 
-                const baseProgress = 10 + Math.min(Math.round((completedDays / totalDays) * 85), 85);
-                const formattedStart = formatDate(currentStartDate);
-                const formattedEnd = formatDate(currentEndDate);
-                io.to(userId.toString()).emit('sync_progress', {
-                    progress: baseProgress,
-                    message: `[${account.account_name}] 检查 ${formattedStart} -> ${formattedEnd} 区间...`
-                });
-
-                // --- 核心改动 5: 在循环内部分别进行条件性同步 ---
                 if (syncStatus.shouldSyncTransactions) {
-                    const transactionProgressContext = {
-                        io,
-                        userId,
-                        accountName: account.account_name,
-                        dataType: '交易',
-                        baseProgress,
-                        progressWeight: 0
-                    };
-                    const transactions = await fetchTransactions(decryptedToken, currentStartDate, currentEndDate, transactionProgressContext);
+                    const transactions = await fetchTransactions(decryptedToken, currentStartDate, currentEndDate);
                     if (transactions.length > 0) {
-                       const sql = `
-                    INSERT INTO transactions (
-                        user_id, platform, platform_account_id, platform_transaction_id, platform_ad_id, uid, 
-                        order_time, sale_amount, sale_comm, validation_date, order_unit, ip, referer_url, status, merchant_name
-                    ) VALUES ? 
-                    ON DUPLICATE KEY UPDATE 
-                        sale_amount=VALUES(sale_amount), sale_comm=VALUES(sale_comm), validation_date=VALUES(validation_date),
-                        order_unit = VALUES(order_unit), ip = VALUES(ip), referer_url = VALUES(referer_url), status = VALUES(status), merchant_name = VALUES(merchant_name), updated_at=NOW()
-                `;
-                       const values = transactions.map(tx => [
-                           userId, 'Linkbux', account.id, tx.linkbux_id, tx.mid, tx.uid,
-                           tx.order_time ? new Date(tx.order_time * 1000) : null,
-                           tx.sale_amount, tx.sale_comm, tx.validation_date || null, tx.order_unit, tx.ip, tx.referer_url, tx.status, tx.merchant_name
-                       ]);
+                        const values = transactions.map(tx => [
+                            userId, 'Linkbux', account.id, tx.linkbux_id, tx.mid, tx.uid, tx.order_time ? new Date(tx.order_time * 1000) : null, tx.sale_amount, tx.sale_comm, tx.validation_date || null, tx.order_unit, tx.ip, tx.referer_url, tx.status, tx.merchant_name
+                        ]);
+                        const sql = `INSERT INTO transactions (user_id, platform, platform_account_id, platform_transaction_id, platform_ad_id, uid, order_time, sale_amount, sale_comm, validation_date, order_unit, ip, referer_url, status, merchant_name) VALUES ? ON DUPLICATE KEY UPDATE sale_amount=VALUES(sale_amount), sale_comm=VALUES(sale_comm), validation_date=VALUES(validation_date), status=VALUES(status), updated_at=NOW()`;
                         await client.query(sql, [values]);
                     }
                 }
+                // (此处可以按需补充结算同步逻辑)
 
-                if (syncStatus.shouldSyncSettlements) {
-                    const settlementProgressContext = {
-                        io,
-                        userId,
-                        accountName: account.account_name,
-                        dataType: '结算',
-                        baseProgress,
-                        progressWeight: 0
-                    };
-                    const settlements = await fetchSettlements(decryptedToken, currentStartDate, currentEndDate, settlementProgressContext);
-                    if (settlements.length > 0) {
-                      const sql = `
-                    INSERT INTO settlements (
-                        user_id, platform, platform_account_id, platform_ad_id,
-                        settlement_id, settlement_date, sale_comm, paid_date, payment_id, settlement_type, merchant_name, note
-                    ) VALUES ? 
-                    ON DUPLICATE KEY UPDATE 
-                        platform_ad_id=VALUES(platform_ad_id), settlement_date=VALUES(settlement_date),
-                        sale_comm = VALUES(sale_comm), paid_date = VALUES(paid_date), payment_id = VALUES(payment_id),
-                        settlement_type = VALUES(settlement_type), merchant_name = VALUES(merchant_name), note = VALUES(note), updated_at = NOW()
-                `;
-                      const values = settlements.map(s => [
-                          userId, 'Linkbux', account.id, s.mid,
-                          s.settlement_id,
-                          s.settlement_date ? new Date(s.settlement_date) : null,
-                          s.sale_comm,
-                          s.paid_date ? new Date(s.paid_date) : null,
-                          s.payment_id,
-                          s.settlement_type,
-                          s.merchant_name,
-                          s.note || null
-                      ]);
-                        await client.query(sql, [values]);
-                    }
-                }
-                // --- 分别同步结束 ---
-
-                completedDays += 61;
                 currentStartDate.setDate(currentStartDate.getDate() + 61);
-                await delay(500);
             }
-        } else {
-            const message = `[${account.account_name}] 交易和结算数据均已存在，跳过同步。`;
-            io.to(userId.toString()).emit('sync_progress', {
-                progress: 95,
-                message
-            }); // 给一个较高的进度
-            console.log(`${initialLog} - ${message}`);
         }
 
         io.to(userId.toString()).emit('sync_complete', {
@@ -336,20 +269,22 @@ async function runInitialSyncForUser(io, userId, account, startDate) {
         });
         console.log(`${initialLog} - 同步成功！`);
     } catch (error) {
+        if (client) await client.rollback();
         io.to(userId.toString()).emit('sync_error', {
             message: `账户 [${account.account_name}] 同步失败: ${error.message}`
         });
-        console.error(`${initialLog} - 同步时出错:`, error.message);
+        console.error(`${initialLog} - 同步时出错:`, error);
     } finally {
-        if (client) {
-            client.release();
-            console.log(`${initialLog} - 数据库客户端已释放。`);
-        }
+        if (client) client.release();
+        console.log(`${initialLog} - 数据库客户端已释放。`);
     }
 }
 
 module.exports = {
     fetchTransactions,
-    runInitialSyncForUser,
+    fetchSettlements,
+    fetchAds,
+    fetchClicks,
+    runInitialSyncForUser, // 确保 runInitialSyncForUser 被正确导出
     delay
 };

@@ -1,5 +1,3 @@
-// 文件: router_handler/ad_accounts.js
-
 const db = require('../db');
 const moment = require('moment');
 
@@ -7,7 +5,7 @@ const moment = require('moment');
  * @function getAdAccountsDashboard
  * @description 获取Ads子账户看板的全部数据
  */
-// 文件路径: router_handler/ad_accounts.js
+// 文件路径: router_handler/ad_accounts
 
 exports.getAdAccountsDashboard = async (req, res) => {
     const userId = req.user.id;

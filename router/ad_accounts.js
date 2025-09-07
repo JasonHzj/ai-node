@@ -1,8 +1,6 @@
-// 文件: router/ad_accounts.js
-
 const express = require('express');
 const router = express.Router();
-const adAccountsHandler = require('../router_handler/ad_accounts.js');
+const adAccountsHandler = require('../router_handler/ad_accounts');
 
 // GET /api/ad-accounts/dashboard - 获取看板主数据
 router.get('/ad-accounts/dashboard', adAccountsHandler.getAdAccountsDashboard);

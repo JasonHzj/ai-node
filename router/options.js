@@ -1,12 +1,7 @@
-// =======================================================================
-// 文件 2: router/options.js (需要修改)
-// 作用: 增加一条新的路由规则来调用上面的处理函数。
-// =======================================================================
-
 const express = require('express');
 const router = express.Router();
 
-const optionsHandler = require('../router_handler/options.js');
+const optionsHandler = require('../router_handler/options');
 
 // 保留已有的路由
 router.get('/options/countries', optionsHandler.getCountries);
